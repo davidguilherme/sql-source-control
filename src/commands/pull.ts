@@ -4,6 +4,7 @@ import * as glob from 'glob';
 import * as sql from 'mssql';
 import * as multimatch from 'multimatch';
 import * as path from 'path';
+import * as tsort from 'tsort';
 import { isArray } from 'ts-util-is';
 
 import { Config } from '../common/config';
@@ -28,7 +29,8 @@ import {
   objectRead,
   primaryKeyRead,
   tableRead,
-  tvpRead
+  tvpRead,
+  dependenciesRead
   } from '../sql/sys';
 
 /**
@@ -54,18 +56,54 @@ export function pull(name: string): void {
         pool.request().query(primaryKeyRead),
         pool.request().query(foreignKeyRead),
         pool.request().query(indexRead),
-        pool.request().query(tvpRead)
-      ]).then(results => {
+        pool.request().query(tvpRead),
+        pool.request().query(dependenciesRead)
+      ])
+      .then(results => {
         pool.close();
         return results;
       });
     })
-    .then(results => scriptFiles(config, results))
+    .then(results => {
+      resolveObjectDependencies(config, results)
+      scriptFiles(config, results)
+    })
     .then(() => {
       const time: [number, number] = process.hrtime(start);
       console.log(chalk.green(`Finished after ${time[0]}s!`));
     })
     .catch(err => console.error(err));
+}
+
+/**
+ * Resolve the object dependencies of all objects on `results`
+ * 
+ * @param config Current configuration to use.
+ * @param results Array of data sets from SQL queries.
+ */
+function resolveObjectDependencies(config: Config, results: sql.IResult<any>[]): void {
+  let objectsOrdered: string[];
+  let dependenciesGraph: Array<string[]>;
+
+  const tvps: TvpRecordSet[] = results[6].recordset;
+  const dependencies: sql.IRecordSet<any> = results[7].recordset;
+
+  dependenciesGraph = dependencies.map(dep => [
+    dep.dependency_id ? util.safeFile(`${dep.dependency_schema}.${dep.dependency_name}`) : '0',
+    util.safeFile(`${dep.schema}.${dep.name}`)
+  ])
+
+  objectsOrdered = tvps.map(tvps => util.safeFile(`${tvps.schema}.${tvps.name}`))
+  objectsOrdered.push(...tsort(dependenciesGraph).sort().filter(obj => obj !== '0'))
+
+  const content: string = JSON.stringify(objectsOrdered, null, 2);
+  fs.outputFile(`${config.output.root}/files.json`, content, (error: Error) => {
+    if (error) {
+      return console.error(error);
+    }
+
+    console.log('files.json file created!');
+  });
 }
 
 /**

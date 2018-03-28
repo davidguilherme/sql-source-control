@@ -73,7 +73,7 @@ export function idempotency(item: AbstractRecordSet, type: IdempotencyOption): s
     // if not exists
     if (item.type === 'TT') {
       return [
-        'if exists (',
+        'if not exists (',
         '   select * from sys.table_types as t',
         '   join sys.schemas s on t.schema_id = s.schema_id',
         `   where t.name = '${item.name}' and s.name = '${item.schema}'`,
@@ -208,12 +208,10 @@ function column(item: ColumnRecordSet): string {
     case 'char':
     case 'varbinary':
     case 'binary':
-    case 'text':
       output += '(' + (item.max_length === -1 ? 'max' : item.max_length) + ')';
       break;
     case 'nvarchar':
     case 'nchar':
-    case 'ntext':
       output += '(' + (item.max_length === -1 ? 'max' : item.max_length / 2) + ')';
       break;
     case 'datetime2':

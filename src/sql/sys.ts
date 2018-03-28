@@ -175,3 +175,29 @@ export const objectRead: string = `
     ,s.name
     ,so.type
 `;
+
+export const dependenciesRead: string = `
+select
+  o.object_id,
+  sc.name as [schema],
+  o.name,
+  referenced.object_id as dependency_id,
+  referenced_sc.name as dependency_schema,
+  referenced.name as dependency_name
+from
+  sys.objects o
+join sys.schemas sc
+  on o.schema_id = sc.schema_id
+left join sys.sql_expression_dependencies dep
+  on dep.referencing_id = o.[object_id]
+left join sys.objects referenced
+  on dep.referenced_id = referenced.[object_id]
+left join sys.schemas referenced_sc
+  on referenced.schema_id = referenced_sc.schema_id
+where
+  (not (dep.referencing_id is not null and referenced.object_id is null)) and
+  o.type in ('P', 'V', 'TF', 'IF', 'FN', 'TR', 'U') or
+  referenced.type in ('P', 'V', 'TF', 'IF', 'FN', 'TR', 'U')
+order by
+  o.name
+`

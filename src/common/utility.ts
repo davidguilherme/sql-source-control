@@ -185,9 +185,10 @@ export function getWebConfigConns(file?: string): Connection[] {
  * @param config Config object used to search for connection.
  */
 export function getFilesOrdered(config: Config): string[] {
+  const objects = fs.readJsonSync(`${config.output.root}/files.json`)
   const output: string[] = [];
+  const files: Object = {};
   const directories: string[] = [
-    config.output.schemas,
     config.output.tables,
     config.output.views,
     config.output['scalar-valued'],
@@ -197,9 +198,20 @@ export function getFilesOrdered(config: Config): string[] {
     config.output['table-valued-parameters']
   ];
 
+  const schemaFiles = glob.sync(`${config.output.root}/${config.output.schemas}/**/*.sql`)
+  output.push(...schemaFiles)
+
   for (const dir of directories) {
-    const files: string[] = glob.sync(`${config.output.root}/${dir}/**/*.sql`);
-    output.push(...files);
+    const filePaths: string[] = glob.sync(`${config.output.root}/${dir}/**/*.sql`);
+
+    for (const filePath of filePaths) {
+      const object = path.basename(filePath, '.sql');
+      files[object] = filePath;
+    }
+  }
+
+  for (const object of objects) {
+    output.push(files[object])
   }
 
   return output;
